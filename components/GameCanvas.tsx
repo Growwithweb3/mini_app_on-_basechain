@@ -46,7 +46,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       width={width}
       height={height}
       className="border-2 border-blue-500 rounded-lg"
-      style={{ display: 'block' }}
+      style={{ 
+        display: 'block',
+        maxWidth: '100%',
+        maxHeight: '100%',
+        width: 'auto',
+        height: 'auto'
+      }}
     />
   );
 };

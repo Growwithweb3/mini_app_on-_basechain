@@ -20,6 +20,33 @@ import html2canvas from 'html2canvas';
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
+// Mobile responsive dimensions
+const getMobileDimensions = () => {
+  if (typeof window === 'undefined') return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+  
+  const isMobile = window.innerWidth < 1024;
+  const isLandscape = window.innerWidth > window.innerHeight;
+  
+  if (isMobile && isLandscape) {
+    // Use full viewport on mobile landscape
+    const maxWidth = window.innerWidth - 40; // 20px padding on each side
+    const maxHeight = window.innerHeight - 40;
+    const aspectRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
+    
+    let width = maxWidth;
+    let height = maxWidth / aspectRatio;
+    
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = maxHeight * aspectRatio;
+    }
+    
+    return { width: Math.floor(width), height: Math.floor(height) };
+  }
+  
+  return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+};
+
 export const Game: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(true);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -46,6 +73,8 @@ export const Game: React.FC = () => {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [mintingNFT, setMintingNFT] = useState<string | null>(null); // achievementId being minted
   const fpsRef = useRef({ frames: 0, lastTime: Date.now() });
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
 
   // Initialize game systems
   useEffect(() => {
@@ -218,7 +247,7 @@ export const Game: React.FC = () => {
       }
       
       // Use a fast interval that checks cooldown dynamically (so it responds to multiplier changes)
-      shootInterval = setInterval(() => {
+        shootInterval = setInterval(() => {
         const engine = gameEngineRef.current;
         const now = Date.now();
         // Calculate cooldown using current multiplier (updates when power-up is collected)
@@ -230,9 +259,9 @@ export const Game: React.FC = () => {
           !engine.gameState.isPaused &&
           now - lastShootTime >= cooldown
         ) {
-          engine.shoot();
+            engine.shoot();
           lastShootTime = now;
-        }
+          }
       }, 50); // Check every 50ms for responsive shooting
     }
 
@@ -523,59 +552,85 @@ export const Game: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-900 overflow-hidden" style={{ padding: '2% 10%' }}>
-      <div className="flex gap-4 w-full h-full max-w-[1600px]">
-        {/* Left Sidebar - Controls */}
-        <div className="flex-shrink-0 w-64 space-y-4">
-          {/* Wallet Connection */}
+    <div 
+      className="flex items-center justify-center min-h-screen bg-gray-900 overflow-hidden" 
+      style={{ 
+        padding: typeof window !== 'undefined' && window.innerWidth < 1024 ? '5px' : '2% 10%',
+        width: '100vw',
+        height: '100vh',
+        maxHeight: '100vh',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Portrait Mode Warning */}
+      {isPortrait && (
+        <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[200]">
+          <div className="text-center text-white p-6 max-w-md mx-4">
+            <div className="text-6xl mb-4 animate-spin">📱</div>
+            <h2 className="text-3xl font-bold mb-4">Rotate Your Device</h2>
+            <p className="text-lg mb-6">
+              Please rotate your device to landscape mode to play the game.
+            </p>
+            <p className="text-sm text-gray-400">
+              Like PUBG, this game is designed for landscape orientation!
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className={`flex gap-4 w-full h-full max-w-[1600px] ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'flex-col' : ''}`}>
+        {/* Left Sidebar - Controls - Hidden on mobile landscape */}
+        {(!isPortrait && (typeof window === 'undefined' || window.innerWidth >= 1024)) && (
+          <div className="flex-shrink-0 w-64 space-y-4">
+      {/* Wallet Connection */}
           <div className="bg-gray-800 rounded-lg p-4">
-            <WalletButton
+        <WalletButton
               onConnect={async (address) => {
                 await handleUserInteraction();
-                setWalletAddress(address);
-                // Configure NFT manager with contract address (set after deployment)
-                const contractAddress = getNFTContractAddress();
-                if (contractAddress && contractAddress !== '0x0000000000000000000000000000000000000000') {
-                  nftManager.setConfig({
-                    contractAddress,
-                    contractABI: ACHIEVEMENT_NFT_ABI,
-                  });
-                }
-              }}
-              onDisconnect={() => {
-                setWalletAddress(null);
-              }}
-            />
-          </div>
+            setWalletAddress(address);
+            // Configure NFT manager with contract address (set after deployment)
+            const contractAddress = getNFTContractAddress();
+            if (contractAddress && contractAddress !== '0x0000000000000000000000000000000000000000') {
+              nftManager.setConfig({
+                contractAddress,
+                contractABI: ACHIEVEMENT_NFT_ABI,
+              });
+            }
+          }}
+          onDisconnect={() => {
+            setWalletAddress(null);
+          }}
+        />
+      </div>
 
           {/* Game Controls */}
           <div className="bg-gray-800 rounded-lg p-4 text-white space-y-4">
             <div>
               <div className="text-sm text-gray-400 mb-2">Health</div>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <div className="flex-1 h-4 bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      healthPercent > 50 ? 'bg-green-500' : healthPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${healthPercent}%` }}
-                  />
-                </div>
-                <span className="text-sm whitespace-nowrap">{gameEngine.gameState.playerHealth}/{gameEngine.gameState.maxPlayerHealth}</span>
+                <div
+                  className={`h-full transition-all ${
+                    healthPercent > 50 ? 'bg-green-500' : healthPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${healthPercent}%` }}
+                />
               </div>
+                <span className="text-sm whitespace-nowrap">{gameEngine.gameState.playerHealth}/{gameEngine.gameState.maxPlayerHealth}</span>
+            </div>
             </div>
             
             <div className="grid grid-cols-2 gap-2">
-              <button
+            <button
                 onClick={async () => {
                   await handleUserInteraction();
                   handlePause();
                 }}
                 className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm"
-              >
-                {gameEngine.gameState.isPaused ? 'Resume' : 'Pause'}
-              </button>
-              <button
+            >
+              {gameEngine.gameState.isPaused ? 'Resume' : 'Pause'}
+            </button>
+            <button
                 onClick={async () => {
                   await handleUserInteraction();
                   handleReset();
@@ -590,20 +645,20 @@ export const Game: React.FC = () => {
                   setShowSettings(true);
                 }}
                 className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                title="Settings"
-              >
-                ⚙️
-              </button>
-              <button
+              title="Settings"
+            >
+              ⚙️
+            </button>
+            <button
                 onClick={async () => {
                   await handleUserInteraction();
                   setShowAchievements(true);
                 }}
                 className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors text-sm"
-                title="Achievements"
-              >
-                🏆
-              </button>
+              title="Achievements"
+            >
+              🏆
+            </button>
             </div>
             <button
               onClick={async () => {
@@ -638,65 +693,66 @@ export const Game: React.FC = () => {
                 </span>
               </div>
             )}
-          </div>
         </div>
+        </div>
+        )}
 
         {/* Main Game Area */}
-        <div className="flex-1 flex flex-col items-center justify-center h-full">
+        <div className={`flex-1 flex flex-col items-center justify-center ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'w-full h-full' : 'h-full'}`}>
 
-          {/* FPS Counter */}
-          {settingsManager.getSetting('showFPS') && (
+      {/* FPS Counter */}
+      {settingsManager.getSetting('showFPS') && (
             <div className="absolute top-2 right-2 bg-black/70 text-green-400 px-2 py-1 rounded text-sm font-mono z-20">
-              FPS: {fps}
-            </div>
-          )}
+          FPS: {fps}
+        </div>
+      )}
 
           {/* Simple achievement unlock notification (no popup, just a small toast) */}
-          {newAchievements.length > 0 && (
+      {newAchievements.length > 0 && (
             <div className="fixed top-4 right-4 z-[100]">
               <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-4 py-2 rounded-lg shadow-lg border-2 border-yellow-300 animate-pulse">
                 <div className="font-bold">🏆 {newAchievements.length} New Achievement{newAchievements.length > 1 ? 's' : ''}!</div>
                 <div className="text-xs">Check Achievements section to mint NFTs</div>
-              </div>
             </div>
-          )}
+        </div>
+      )}
 
-          {/* Active Power-ups Display */}
-          {gameEngine.activePowerUps.size > 0 && (
+      {/* Active Power-ups Display */}
+      {gameEngine.activePowerUps.size > 0 && (
             <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-2 rounded-lg z-10">
-              <div className="text-xs font-bold mb-1">Active Power-ups:</div>
-              <div className="flex gap-2 flex-wrap">
-                {Array.from(gameEngine.activePowerUps.entries()).map(([type, expiration]) => {
-                  const timeLeft = Math.max(0, expiration - Date.now());
-                  const seconds = Math.ceil(timeLeft / 1000);
-                  let icon = '⚡';
-                  if (type === 'speed_boost') icon = '💨';
-                  else if (type === 'rapid_fire') icon = '🔥';
-                  else if (type === 'shield') icon = '🛡️';
-                  else if (type === 'multi_shot') icon = '✨';
-                  return (
-                    <div key={type} className="text-xs">
-                      {icon} {seconds}s
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div className="text-xs font-bold mb-1">Active Power-ups:</div>
+          <div className="flex gap-2 flex-wrap">
+            {Array.from(gameEngine.activePowerUps.entries()).map(([type, expiration]) => {
+              const timeLeft = Math.max(0, expiration - Date.now());
+              const seconds = Math.ceil(timeLeft / 1000);
+              let icon = '⚡';
+              if (type === 'speed_boost') icon = '💨';
+              else if (type === 'rapid_fire') icon = '🔥';
+              else if (type === 'shield') icon = '🛡️';
+              else if (type === 'multi_shot') icon = '✨';
+              return (
+                <div key={type} className="text-xs">
+                  {icon} {seconds}s
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-          {/* Game Canvas */}
-          <div 
-            className="relative" 
-            key={resetKey}
-            style={{
-              transform: `translate(${screenShake.x}px, ${screenShake.y}px)`,
-              transition: screenShake.intensity > 0 ? 'none' : 'transform 0.1s ease-out',
-            }}
-          >
+      {/* Game Canvas */}
+      <div 
+        className="relative" 
+        key={resetKey}
+        style={{
+          transform: `translate(${screenShake.x}px, ${screenShake.y}px)`,
+          transition: screenShake.intensity > 0 ? 'none' : 'transform 0.1s ease-out',
+        }}
+      >
         <GameCanvas
           gameEngine={gameEngine}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+          width={canvasDimensions.width}
+          height={canvasDimensions.height}
         />
 
         {/* Game Over Overlay */}
@@ -809,11 +865,11 @@ export const Game: React.FC = () => {
                       console.error('Failed to capture screenshot:', error);
                       // Fallback to text share
                       const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score?\n\nPlay this game base the shooter : https://mini-app-on-basechain.vercel.app/`;
-                      if (navigator.share) {
-                        navigator.share({ text, title: 'Base the Shooter' });
-                      } else {
-                        navigator.clipboard.writeText(text);
-                        alert('Score copied to clipboard!');
+                  if (navigator.share) {
+                    navigator.share({ text, title: 'Base the Shooter' });
+                  } else {
+                    navigator.clipboard.writeText(text);
+                    alert('Score copied to clipboard!');
                       }
                     }
                   }
@@ -875,41 +931,43 @@ export const Game: React.FC = () => {
         )}
       </div>
 
-          {/* Mobile Controls */}
-          <div className="md:hidden mt-4 w-full">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <div className="flex justify-center items-center gap-4">
-                <button
-                  onTouchStart={handleMoveUp}
-                  onMouseDown={handleMoveUp}
-                  className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
-                >
-                  ↑ Up
-                </button>
-                <button
-                  onTouchStart={handleShoot}
-                  onMouseDown={handleShoot}
-                  className="px-8 py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg text-white font-bold text-xl transition-colors"
-                >
-                  🔫 Shoot
-                </button>
-                <button
-                  onTouchStart={handleMoveDown}
-                  onMouseDown={handleMoveDown}
-                  className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
-                >
-                  ↓ Down
-                </button>
-              </div>
-            </div>
+      {/* Mobile Controls - Only show in landscape on mobile */}
+      {typeof window !== 'undefined' && window.innerWidth < 1024 && !isPortrait && (
+        <div className="w-full mt-2">
+          <div className="bg-gray-800 rounded-lg p-3">
+            <div className="flex justify-center items-center gap-3">
+            <button
+              onTouchStart={handleMoveUp}
+              onMouseDown={handleMoveUp}
+              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
+            >
+              ↑ Up
+            </button>
+            <button
+              onTouchStart={handleShoot}
+              onMouseDown={handleShoot}
+              className="px-8 py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg text-white font-bold text-xl transition-colors"
+            >
+              🔫 Shoot
+            </button>
+            <button
+              onTouchStart={handleMoveDown}
+              onMouseDown={handleMoveDown}
+              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
+            >
+              ↓ Down
+            </button>
           </div>
+        </div>
+        </div>
+      )}
 
-          {/* Desktop Controls Info */}
-          <div className="hidden md:block mt-4 text-white text-center">
-            <p className="text-sm text-gray-400">
-              Controls: ↑ ↓ Arrow Keys to Move | → Arrow Key to Shoot
-            </p>
-          </div>
+      {/* Desktop Controls Info */}
+      <div className="hidden md:block mt-4 text-white text-center">
+        <p className="text-sm text-gray-400">
+          Controls: ↑ ↓ Arrow Keys to Move | → Arrow Key to Shoot
+        </p>
+      </div>
         </div>
       </div>
 
@@ -999,8 +1057,8 @@ export const Game: React.FC = () => {
                           )}
                         </div>
                       )}
-                    </div>
-                  );
+    </div>
+  );
                 })}
               </div>
             </div>

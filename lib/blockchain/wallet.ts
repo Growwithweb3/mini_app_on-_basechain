@@ -35,6 +35,8 @@ export class WalletManager {
     provider: null,
     signer: null,
   };
+  private eventListenersAttached: boolean = false;
+  private isConnecting: boolean = false;
 
   private constructor() {}
 
@@ -51,13 +53,50 @@ export class WalletManager {
     return typeof (window as any).ethereum !== 'undefined';
   }
 
+  // Get the preferred provider (MetaMask first, then Coinbase, then first available)
+  private getEthereumProvider(): any {
+    if (typeof window === 'undefined') return null;
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) return null;
+
+    // If ethereum is an array (multiple providers), prefer MetaMask
+    if (Array.isArray(ethereum)) {
+      // Try to find MetaMask first
+      const metaMask = ethereum.find((provider: any) => provider.isMetaMask);
+      if (metaMask) return metaMask;
+      // Try Coinbase Wallet
+      const coinbase = ethereum.find((provider: any) => provider.isCoinbaseWallet);
+      if (coinbase) return coinbase;
+      // Otherwise use the first provider
+      return ethereum[0];
+    }
+
+    // If ethereum has providers array (EIP-6963)
+    if (ethereum.providers && Array.isArray(ethereum.providers)) {
+      const metaMask = ethereum.providers.find((provider: any) => provider.isMetaMask);
+      if (metaMask) return metaMask;
+      const coinbase = ethereum.providers.find((provider: any) => provider.isCoinbaseWallet);
+      if (coinbase) return coinbase;
+      return ethereum.providers[0];
+    }
+
+    // Single provider - check if it's actually an array wrapped
+    if (ethereum.isMetaMask) return ethereum;
+    if (ethereum.isCoinbaseWallet) return ethereum;
+
+    // Single provider
+    return ethereum;
+  }
+
   // Get MetaMask provider
   private getProvider(): ethers.BrowserProvider | null {
     if (typeof window === 'undefined') return null;
     if (!WalletManager.isMetaMaskInstalled()) return null;
     
     try {
-      return new ethers.BrowserProvider((window as any).ethereum);
+      const ethereumProvider = this.getEthereumProvider();
+      if (!ethereumProvider) return null;
+      return new ethers.BrowserProvider(ethereumProvider);
     } catch (error) {
       console.error('Error creating provider:', error);
       return null;
@@ -66,6 +105,11 @@ export class WalletManager {
 
   // Connect wallet
   async connect(): Promise<WalletState> {
+    // Prevent infinite recursion
+    if (this.isConnecting) {
+      return this.walletState;
+    }
+
     if (!WalletManager.isMetaMaskInstalled()) {
       throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
     }
@@ -75,9 +119,16 @@ export class WalletManager {
       throw new Error('Failed to connect to MetaMask');
     }
 
+    this.isConnecting = true;
+
     try {
+      const ethereumProvider = this.getEthereumProvider();
+      if (!ethereumProvider) {
+        throw new Error('No wallet provider found');
+      }
+
       // Request account access
-      await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+      await ethereumProvider.request({ method: 'eth_requestAccounts' });
       
       // Get signer
       const signer = await provider.getSigner();
@@ -110,19 +161,11 @@ export class WalletManager {
         };
       }
 
-      // Listen for account changes
-      (window as any).ethereum.on('accountsChanged', (accounts: string[]) => {
-        if (accounts.length === 0) {
-          this.disconnect();
-        } else {
-          this.connect();
-        }
-      });
-
-      // Listen for chain changes
-      (window as any).ethereum.on('chainChanged', () => {
-        this.connect();
-      });
+      // Attach event listeners only once
+      if (!this.eventListenersAttached) {
+        this.attachEventListeners(ethereumProvider);
+        this.eventListenersAttached = true;
+      }
 
       return this.walletState;
     } catch (error: any) {
@@ -130,7 +173,75 @@ export class WalletManager {
         throw new Error('User rejected the connection request');
       }
       throw new Error(`Failed to connect wallet: ${error.message}`);
+    } finally {
+      this.isConnecting = false;
     }
+  }
+
+  // Attach event listeners with guards to prevent recursion
+  private attachEventListeners(ethereumProvider: any): void {
+    // Remove any existing listeners first to prevent duplicates
+    try {
+      ethereumProvider.removeAllListeners('accountsChanged');
+      ethereumProvider.removeAllListeners('chainChanged');
+    } catch (e) {
+      // Some providers don't support removeAllListeners
+    }
+
+    let accountsChangedTimeout: NodeJS.Timeout | null = null;
+    let chainChangedTimeout: NodeJS.Timeout | null = null;
+
+    // Listen for account changes
+    ethereumProvider.on('accountsChanged', (accounts: string[]) => {
+      if (this.isConnecting) return; // Prevent recursion
+      
+      // Clear any pending timeout
+      if (accountsChangedTimeout) {
+        clearTimeout(accountsChangedTimeout);
+      }
+      
+      if (accounts.length === 0) {
+        this.disconnect();
+      } else {
+        // Use setTimeout to break the call stack and debounce
+        accountsChangedTimeout = setTimeout(() => {
+          if (!this.isConnecting) {
+            this.isConnecting = true;
+            this.connect()
+              .catch(console.error)
+              .finally(() => {
+                setTimeout(() => {
+                  this.isConnecting = false;
+                }, 500);
+              });
+          }
+        }, 300);
+      }
+    });
+
+    // Listen for chain changes
+    ethereumProvider.on('chainChanged', () => {
+      if (this.isConnecting) return; // Prevent recursion
+      
+      // Clear any pending timeout
+      if (chainChangedTimeout) {
+        clearTimeout(chainChangedTimeout);
+      }
+      
+      // Use setTimeout to break the call stack and debounce
+      chainChangedTimeout = setTimeout(() => {
+        if (!this.isConnecting) {
+          this.isConnecting = true;
+          this.connect()
+            .catch(console.error)
+            .finally(() => {
+              setTimeout(() => {
+                this.isConnecting = false;
+              }, 500);
+            });
+        }
+      }, 300);
+    });
   }
 
   // Switch to Base network
@@ -139,8 +250,13 @@ export class WalletManager {
       throw new Error('MetaMask is not installed');
     }
 
+    const ethereumProvider = this.getEthereumProvider();
+    if (!ethereumProvider) {
+      throw new Error('No wallet provider found');
+    }
+
     try {
-      await (window as any).ethereum.request({
+      await ethereumProvider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: BASE_NETWORK.chainId }],
       });
@@ -148,7 +264,7 @@ export class WalletManager {
       // This error code indicates that the chain has not been added to MetaMask
       if (switchError.code === 4902) {
         try {
-          await (window as any).ethereum.request({
+          await ethereumProvider.request({
             method: 'wallet_addEthereumChain',
             params: [BASE_NETWORK],
           });
@@ -163,6 +279,7 @@ export class WalletManager {
 
   // Disconnect wallet
   disconnect(): void {
+    this.isConnecting = false;
     this.walletState = {
       connected: false,
       address: null,

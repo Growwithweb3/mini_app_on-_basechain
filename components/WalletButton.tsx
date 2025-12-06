@@ -23,19 +23,9 @@ export const WalletButton: React.FC<WalletButtonProps> = ({ onConnect, onDisconn
   useEffect(() => {
     checkConnection();
     
-    // Listen for wallet changes
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
-      (window as any).ethereum.on('chainChanged', () => {
-        window.location.reload();
-      });
-    }
-
-    return () => {
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
-        (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
-      }
-    };
+    // Don't attach listeners here - WalletManager handles this to avoid conflicts
+    // The WalletManager will handle all event listeners to prevent duplicate listeners
+    // when multiple wallet extensions are installed
   }, []);
 
   const checkConnection = async () => {
@@ -47,7 +37,20 @@ export const WalletButton: React.FC<WalletButtonProps> = ({ onConnect, onDisconn
       const provider = walletManager.getProviderInstance();
       if (!provider) return;
 
-      const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
+      // Get the correct ethereum provider (handles multiple wallets)
+      const ethereum = (window as any).ethereum;
+      let ethereumProvider = ethereum;
+      
+      // Handle multiple providers
+      if (Array.isArray(ethereum)) {
+        const metaMask = ethereum.find((p: any) => p.isMetaMask);
+        ethereumProvider = metaMask || ethereum[0];
+      } else if (ethereum?.providers && Array.isArray(ethereum.providers)) {
+        const metaMask = ethereum.providers.find((p: any) => p.isMetaMask);
+        ethereumProvider = metaMask || ethereum.providers[0];
+      }
+
+      const accounts = await ethereumProvider.request({ method: 'eth_accounts' });
       if (accounts.length > 0) {
         const state = walletManager.getState();
         setWalletState({
