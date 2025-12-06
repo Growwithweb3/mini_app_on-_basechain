@@ -75,6 +75,7 @@ export const Game: React.FC = () => {
   const fpsRef = useRef({ frames: 0, lastTime: Date.now() });
   const [canvasDimensions, setCanvasDimensions] = useState({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
   const [isPortrait, setIsPortrait] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Initialize game systems
   useEffect(() => {
@@ -208,6 +209,27 @@ export const Game: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Detect mobile devices (excluding iPad)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent;
+      // Check if it's iPad - iPad should be allowed
+      const isIPad = /iPad/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      // Check if it's a mobile device (but not iPad)
+      const isMobileDevice = !isIPad && (/Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || (window.innerWidth < 768 && !isIPad));
+      setIsMobile(isMobileDevice);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
     };
   }, []);
 
@@ -562,17 +584,17 @@ export const Game: React.FC = () => {
         overflow: 'hidden'
       }}
     >
-      {/* Portrait Mode Warning - Show when in portrait on mobile */}
-      {isPortrait && (
+      {/* Mobile Device Warning - Show on mobile devices */}
+      {isMobile && (
         <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[200]">
           <div className="text-center text-white p-6 max-w-md mx-4">
-            <div className="text-6xl mb-4 animate-spin">📱</div>
-            <h2 className="text-3xl font-bold mb-4">Rotate to Landscape</h2>
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-3xl font-bold mb-4">Device Not Supported</h2>
             <p className="text-lg mb-6">
-              Please rotate your device to landscape mode to play the game.
+              Game is only compatible for laptop, PC, and iPad. Not for mobile.
             </p>
             <p className="text-sm text-gray-400">
-              Like PUBG, this game is designed for landscape orientation!
+              Sorry for the inconvenience.
             </p>
           </div>
         </div>
