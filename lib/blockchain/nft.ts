@@ -112,9 +112,36 @@ export class NFTManager {
         score
       );
 
+      // Log metadata before uploading (for debugging)
+      console.log('📋 Metadata to upload:', JSON.stringify(metadata, null, 2));
+      console.log('🖼️  Image URL in metadata:', metadata.image);
+      
+      // Verify image URL is accessible before minting
+      if (metadata.image.startsWith('https://')) {
+        try {
+          const imageTest = await fetch(metadata.image, { method: 'HEAD' });
+          if (!imageTest.ok) {
+            console.warn('⚠️  Warning: Image URL returned status', imageTest.status);
+          } else {
+            console.log('✅ Image URL is accessible:', metadata.image);
+          }
+        } catch (error) {
+          console.warn('⚠️  Warning: Could not verify image URL:', error);
+        }
+      }
+
       // Upload metadata to IPFS
       const metadataIpfsHash = await PinataManager.uploadMetadata(metadata);
-      console.log('Metadata uploaded to IPFS:', metadataIpfsHash);
+      console.log('📤 Metadata uploaded to IPFS:', metadataIpfsHash);
+      
+      // Convert metadata IPFS hash to gateway URL for verification
+      let metadataGatewayUrl = '';
+      if (metadataIpfsHash.startsWith('ipfs://')) {
+        const hash = metadataIpfsHash.replace('ipfs://', '');
+        metadataGatewayUrl = `https://gateway.pinata.cloud/ipfs/${hash}`;
+        console.log('🔗 Metadata gateway URL:', metadataGatewayUrl);
+        console.log('💡 You can open this URL in browser to verify metadata JSON');
+      }
 
       // Get contract and mint
       const contract = await this.getContract();

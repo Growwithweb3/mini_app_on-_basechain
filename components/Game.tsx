@@ -370,6 +370,22 @@ export const Game: React.FC = () => {
           // Alternative gateways: https://ipfs.io/ipfs/ or https://cloudflare-ipfs.com/ipfs/
           imageIpfsHash = `https://gateway.pinata.cloud/ipfs/${hash}`;
           console.log('✅ Image uploaded and converted to gateway URL:', imageIpfsHash);
+          
+          // Verify image is accessible before proceeding
+          try {
+            const imageTest = await fetch(imageIpfsHash, { method: 'HEAD', cache: 'no-cache' });
+            if (imageTest.ok) {
+              console.log('✅ Image URL verified - accessible at:', imageIpfsHash);
+            } else {
+              console.warn('⚠️  Image URL returned status:', imageTest.status, imageTest.statusText);
+              // Try alternative gateway
+              const altUrl = `https://ipfs.io/ipfs/${hash}`;
+              console.log('🔄 Trying alternative gateway:', altUrl);
+              imageIpfsHash = altUrl;
+            }
+          } catch (error) {
+            console.warn('⚠️  Could not verify image URL, but proceeding:', error);
+          }
         } else if (ipfsHash.startsWith('https://')) {
           // Already a gateway URL, use as-is
           imageIpfsHash = ipfsHash;
@@ -387,6 +403,13 @@ export const Game: React.FC = () => {
         alert('Warning: Image upload failed. Please ensure Pinata is configured correctly.');
       }
 
+      // Log what we're about to mint (for debugging)
+      console.log('📦 Minting NFT with:');
+      console.log('  - Achievement:', achievement.name);
+      console.log('  - Image URL:', imageIpfsHash);
+      console.log('  - Level:', gameEngine.gameState.level);
+      console.log('  - Score:', gameEngine.gameState.score);
+
       const result = await nftManager.mintAchievement(
         achievement.id,
         achievement.name,
@@ -396,11 +419,23 @@ export const Game: React.FC = () => {
         gameEngine.gameState.score
       );
 
-      console.log('NFT minted successfully:', result);
+      console.log('✅ NFT minted successfully:', result);
       setMintingNFT(null);
       
-      // Show success notification
-      alert(`🎉 Achievement NFT minted! View on BaseScan: https://basescan.org/tx/${result.txHash}`);
+      // Show success notification with metadata link
+      const contractAddress = getNFTContractAddress();
+      const tokenId = result.tokenId !== undefined ? result.tokenId : 'N/A';
+      alert(
+        `🎉 Achievement NFT minted!\n\n` +
+        `Transaction: https://basescan.org/tx/${result.txHash}\n` +
+        `Token ID: ${tokenId}\n\n` +
+        `To verify metadata:\n` +
+        `1. Go to: https://basescan.org/address/${contractAddress}\n` +
+        `2. Click "Read Contract" → "tokenURI"\n` +
+        `3. Enter token ID: ${tokenId}\n` +
+        `4. Copy the IPFS URL and open it in browser\n\n` +
+        `Image URL used: ${imageIpfsHash}`
+      );
     } catch (error: any) {
       console.error('Error minting NFT:', error);
       setMintingNFT(null);
