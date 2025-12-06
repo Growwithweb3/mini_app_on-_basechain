@@ -20,11 +20,8 @@ export class AchievementManager {
     if (saved) {
       this.achievements = JSON.parse(saved);
     } else {
-      // Default achievements
+      // Default achievements (only mintable ones)
       this.achievements = [
-        { id: 'first_kill', name: 'First Blood', description: 'Kill your first enemy', unlocked: false },
-        { id: 'level_1', name: 'Level 1 Complete', description: 'Complete Level 1', unlocked: false },
-        { id: 'level_2', name: 'Level 2 Complete', description: 'Complete Level 2', unlocked: false },
         { id: 'level_3', name: 'Level 3 Complete', description: 'Complete Level 3', unlocked: false },
         { id: 'combo_5', name: 'Combo Master', description: 'Get a 5x combo', unlocked: false },
         { id: 'combo_10', name: 'Combo Legend', description: 'Get a 10x combo', unlocked: false },
@@ -50,18 +47,7 @@ export class AchievementManager {
     const newlyUnlocked: Achievement[] = [];
     const now = Date.now();
 
-    // First Kill
-    if (stats.enemiesKilled >= 1 && !this.isUnlocked('first_kill')) {
-      newlyUnlocked.push(this.unlock('first_kill', now));
-    }
-
-    // Level completions
-    if (gameState.level >= 2 && !this.isUnlocked('level_1')) {
-      newlyUnlocked.push(this.unlock('level_1', now));
-    }
-    if (gameState.level >= 3 && !this.isUnlocked('level_2')) {
-      newlyUnlocked.push(this.unlock('level_2', now));
-    }
+    // Level 3 completion (only mintable level achievement)
     if (gameState.isGameOver && gameState.level === 3 && !this.isUnlocked('level_3')) {
       newlyUnlocked.push(this.unlock('level_3', now));
     }
