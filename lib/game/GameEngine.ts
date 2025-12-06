@@ -100,6 +100,11 @@ export class GameEngine {
         this.base.takeDamage(5);
         this.gameState.playerHealth = this.base.health;
         enemy.takeDamage(100); // Remove enemy after melee hit
+        
+        // Check if player died
+        if (!this.base.isAlive()) {
+          this.gameState.isGameOver = true;
+        }
       }
     });
 
@@ -203,8 +208,8 @@ export class GameEngine {
                 });
               }
               
-              // Random chance to spawn power-up (10% chance)
-              if (Math.random() < 0.1) {
+              // Random chance to spawn power-up (10% chance) - only in level 3
+              if (this.gameState.level === 3 && Math.random() < 0.1) {
                 this.spawnPowerUp(enemyCenter.x, enemyCenter.y);
               }
               
@@ -246,8 +251,8 @@ export class GameEngine {
     // Check power-up collisions
     this.checkPowerUpCollisions();
     
-    // Spawn power-ups periodically
-    if (currentTime - this.lastPowerUpSpawn > 15000) { // Every 15 seconds
+    // Spawn power-ups periodically - only in level 3
+    if (this.gameState.level === 3 && currentTime - this.lastPowerUpSpawn > 15000) { // Every 15 seconds
       if (Math.random() < 0.3) { // 30% chance
         this.spawnPowerUp(
           this.canvasWidth - 50,

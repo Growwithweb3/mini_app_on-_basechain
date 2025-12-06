@@ -15,6 +15,7 @@ import { walletManager } from '@/lib/blockchain/wallet';
 import { nftManager } from '@/lib/blockchain/nft';
 import { getNFTContractAddress, ACHIEVEMENT_NFT_ABI } from '@/lib/blockchain/config';
 import { PinataManager } from '@/lib/ipfs/pinata';
+import html2canvas from 'html2canvas';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -27,6 +28,9 @@ export const Game: React.FC = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showMintNFT, setShowMintNFT] = useState(false);
   const [mintableAchievements, setMintableAchievements] = useState<any[]>([]);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
+  const gameOverRef = useRef<HTMLDivElement>(null);
   const [gameEngine] = useState(() => new GameEngine(CANVAS_WIDTH, CANVAS_HEIGHT));
   const [keys, setKeys] = useState<Set<string>>(new Set());
   const gameEngineRef = useRef(gameEngine);
@@ -200,21 +204,36 @@ export const Game: React.FC = () => {
     return () => clearInterval(interval);
   }, [keys]);
 
-  // Handle shooting with ArrowRight - reduced fire rate
+  // Handle shooting with ArrowRight - uses shootCooldownMultiplier for rapid fire
   useEffect(() => {
     let shootInterval: NodeJS.Timeout;
+    let lastShootTime = 0;
+    const BASE_COOLDOWN = 1500;
     
     if (keys.has('ArrowRight')) {
       const engine = gameEngineRef.current;
       if (!engine.gameState.isGameOver && !engine.gameState.isPaused) {
         engine.shoot();
-        // Allow shooting every 350ms (reduced from 200ms for better balance)
-        shootInterval = setInterval(() => {
-          if (keys.has('ArrowRight') && !engine.gameState.isGameOver && !engine.gameState.isPaused) {
-            engine.shoot();
-          }
-        }, 1500);
+        lastShootTime = Date.now();
       }
+      
+      // Use a fast interval that checks cooldown dynamically (so it responds to multiplier changes)
+      shootInterval = setInterval(() => {
+        const engine = gameEngineRef.current;
+        const now = Date.now();
+        // Calculate cooldown using current multiplier (updates when power-up is collected)
+        const cooldown = BASE_COOLDOWN * engine.shootCooldownMultiplier;
+        
+        if (
+          keys.has('ArrowRight') && 
+          !engine.gameState.isGameOver && 
+          !engine.gameState.isPaused &&
+          now - lastShootTime >= cooldown
+        ) {
+          engine.shoot();
+          lastShootTime = now;
+        }
+      }, 50); // Check every 50ms for responsive shooting
     }
 
     return () => {
@@ -234,14 +253,16 @@ export const Game: React.FC = () => {
   }, [gameEngine]);
 
   const lastShootTimeRef = useRef<number>(0);
-  const SHOOT_COOLDOWN = 1500; 
+  const BASE_SHOOT_COOLDOWN = 1500; 
 
   const handleShoot = useCallback(() => {
     const now = Date.now();
+    // Use shootCooldownMultiplier for rapid fire power-up
+    const cooldown = BASE_SHOOT_COOLDOWN * gameEngine.shootCooldownMultiplier;
     if (
       !gameEngine.gameState.isGameOver && 
       !gameEngine.gameState.isPaused &&
-      now - lastShootTimeRef.current >= SHOOT_COOLDOWN
+      now - lastShootTimeRef.current >= cooldown
     ) {
       lastShootTimeRef.current = now;
       gameEngine.shoot();
@@ -680,7 +701,7 @@ export const Game: React.FC = () => {
 
         {/* Game Over Overlay */}
         {gameEngine.gameState.isGameOver && (
-          <div className="absolute inset-0 bg-black bg-opacity-85 flex items-center justify-center rounded-lg">
+          <div ref={gameOverRef} className="absolute inset-0 bg-black bg-opacity-85 flex items-center justify-center rounded-lg">
             <div className="text-center text-white max-w-lg w-full px-6">
               <h2 className="text-5xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                 Game Over!
@@ -771,13 +792,30 @@ export const Game: React.FC = () => {
 
               {/* Share Score Button */}
               <button
-                onClick={() => {
-                  const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score?`;
-                  if (navigator.share) {
-                    navigator.share({ text, title: 'Base the Shooter' });
-                  } else {
-                    navigator.clipboard.writeText(text);
-                    alert('Score copied to clipboard!');
+                onClick={async () => {
+                  await handleUserInteraction();
+                  // Capture screenshot
+                  if (gameOverRef.current) {
+                    try {
+                      const canvas = await html2canvas(gameOverRef.current, {
+                        backgroundColor: '#000000',
+                        scale: 2,
+                        logging: false,
+                      });
+                      const imageUrl = canvas.toDataURL('image/png');
+                      setShareImageUrl(imageUrl);
+                      setShowShareModal(true);
+                    } catch (error) {
+                      console.error('Failed to capture screenshot:', error);
+                      // Fallback to text share
+                      const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score? @base`;
+                      if (navigator.share) {
+                        navigator.share({ text, title: 'Base the Shooter' });
+                      } else {
+                        navigator.clipboard.writeText(text);
+                        alert('Score copied to clipboard!');
+                      }
+                    }
                   }
                 }}
                 className="w-full bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg mb-2"
@@ -1108,6 +1146,124 @@ export const Game: React.FC = () => {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && shareImageUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-xl max-w-2xl w-full border-2 border-green-500 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold text-white">Share Your Score</h3>
+              <button
+                onClick={() => {
+                  setShowShareModal(false);
+                  setShareImageUrl(null);
+                }}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Screenshot Preview */}
+            <div className="mb-6 bg-gray-900 rounded-lg p-4 flex justify-center">
+              <img
+                src={shareImageUrl}
+                alt="Score screenshot"
+                className="max-w-full h-auto rounded-lg"
+              />
+            </div>
+
+            {/* Share Options */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Share on X (Twitter) */}
+              <button
+                onClick={() => {
+                  const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score? @base`;
+                  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+                  window.open(url, '_blank');
+                }}
+                className="bg-black hover:bg-gray-900 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 border border-gray-600"
+              >
+                <span className="text-xl">𝕏</span>
+                <span>Share on X</span>
+              </button>
+
+              {/* Copy Image */}
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(shareImageUrl);
+                    const blob = await response.blob();
+                    await navigator.clipboard.write([
+                      new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    alert('Screenshot copied to clipboard!');
+                  } catch (error) {
+                    console.error('Failed to copy image:', error);
+                    alert('Failed to copy image. Try downloading instead.');
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <span>📋</span>
+                <span>Copy Image</span>
+              </button>
+
+              {/* Download Image */}
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.download = `base-shooter-score-${gameEngine.gameState.score}.png`;
+                  link.href = shareImageUrl;
+                  link.click();
+                }}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <span>💾</span>
+                <span>Download</span>
+              </button>
+
+              {/* Share via Native Share */}
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(shareImageUrl);
+                    const blob = await response.blob();
+                    const file = new File([blob], 'score.png', { type: 'image/png' });
+                    
+                    if (navigator.share && navigator.canShare({ files: [file] })) {
+                      await navigator.share({
+                        title: 'Base the Shooter Score',
+                        text: `I scored ${gameEngine.gameState.score.toLocaleString()} points! @base`,
+                        files: [file],
+                      });
+                    } else {
+                      // Fallback to text share
+                      const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score? @base`;
+                      if (navigator.share) {
+                        await navigator.share({ text, title: 'Base the Shooter' });
+                      } else {
+                        navigator.clipboard.writeText(text);
+                        alert('Score text copied to clipboard!');
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Share failed:', error);
+                  }
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <span>📤</span>
+                <span>Share</span>
+              </button>
+            </div>
+
+            <p className="text-center text-gray-400 text-sm mt-4">
+              Tag @base when you share! 🚀
+            </p>
           </div>
         </div>
       )}
