@@ -165,7 +165,8 @@ export class GameEngine {
               
               this.gameState.lastKillTime = currentTime;
               
-              const basePoints = 10 * this.gameState.level;
+              // Level 3 enemies give 500 points, others give 10 * level
+              const basePoints = this.gameState.level === 3 ? 500 : 10 * this.gameState.level;
               const points = Math.round(basePoints * this.gameState.comboMultiplier);
               this.gameState.score += points;
               this.gameState.enemiesKilled++;
