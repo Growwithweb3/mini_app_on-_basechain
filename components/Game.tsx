@@ -20,7 +20,7 @@ import html2canvas from 'html2canvas';
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
-// Mobile responsive dimensions
+// Mobile responsive dimensions - Landscape mode support
 const getMobileDimensions = () => {
   if (typeof window === 'undefined') return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
   
@@ -28,9 +28,9 @@ const getMobileDimensions = () => {
   const isLandscape = window.innerWidth > window.innerHeight;
   
   if (isMobile && isLandscape) {
-    // Use full viewport on mobile landscape
-    const maxWidth = window.innerWidth - 40; // 20px padding on each side
-    const maxHeight = window.innerHeight - 40;
+    // Landscape mode: use full viewport (like PUBG)
+    const maxWidth = window.innerWidth - 20; // 10px padding on each side
+    const maxHeight = window.innerHeight - 100; // Leave space for controls
     const aspectRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
     
     let width = maxWidth;
@@ -73,8 +73,8 @@ export const Game: React.FC = () => {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [mintingNFT, setMintingNFT] = useState<string | null>(null); // achievementId being minted
   const fpsRef = useRef({ frames: 0, lastTime: Date.now() });
-  const [isPortrait, setIsPortrait] = useState(false);
   const [canvasDimensions, setCanvasDimensions] = useState({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
+  const [isPortrait, setIsPortrait] = useState(false);
 
   // Initialize game systems
   useEffect(() => {
@@ -562,12 +562,12 @@ export const Game: React.FC = () => {
         overflow: 'hidden'
       }}
     >
-      {/* Portrait Mode Warning */}
+      {/* Portrait Mode Warning - Show when in portrait on mobile */}
       {isPortrait && (
         <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[200]">
           <div className="text-center text-white p-6 max-w-md mx-4">
             <div className="text-6xl mb-4 animate-spin">📱</div>
-            <h2 className="text-3xl font-bold mb-4">Rotate Your Device</h2>
+            <h2 className="text-3xl font-bold mb-4">Rotate to Landscape</h2>
             <p className="text-lg mb-6">
               Please rotate your device to landscape mode to play the game.
             </p>
@@ -579,8 +579,8 @@ export const Game: React.FC = () => {
       )}
 
       <div className={`flex gap-4 w-full h-full max-w-[1600px] ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'flex-col' : ''}`}>
-        {/* Left Sidebar - Controls - Hidden on mobile landscape */}
-        {(!isPortrait && (typeof window === 'undefined' || window.innerWidth >= 1024)) && (
+        {/* Left Sidebar - Controls - Hidden on mobile */}
+        {(typeof window === 'undefined' || window.innerWidth >= 1024) && (
           <div className="flex-shrink-0 w-64 space-y-4">
       {/* Wallet Connection */}
           <div className="bg-gray-800 rounded-lg p-4">
@@ -698,7 +698,7 @@ export const Game: React.FC = () => {
         )}
 
         {/* Main Game Area */}
-        <div className={`flex-1 flex flex-col items-center justify-center ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'w-full h-full' : 'h-full'}`}>
+        <div className={`flex-1 flex flex-col items-center justify-center ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'w-full flex-1' : 'h-full'}`}>
 
       {/* FPS Counter */}
       {settingsManager.getSetting('showFPS') && (
@@ -931,9 +931,9 @@ export const Game: React.FC = () => {
         )}
       </div>
 
-      {/* Mobile Controls - Only show in landscape on mobile */}
+      {/* Mobile Controls - Only show in landscape mode on mobile */}
       {typeof window !== 'undefined' && window.innerWidth < 1024 && !isPortrait && (
-        <div className="w-full mt-2">
+        <div className="w-full mt-2 flex-shrink-0">
           <div className="bg-gray-800 rounded-lg p-3">
             <div className="flex justify-center items-center gap-3">
             <button
