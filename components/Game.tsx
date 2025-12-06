@@ -48,8 +48,8 @@ export const Game: React.FC = () => {
         setHighScore(parseInt(savedHighScore, 10));
       }
       
-      // Start background music
-      soundManager.startBackgroundMusic();
+      // Start background music (will resume audio context on first user interaction)
+      // Don't start automatically to avoid autoplay policy warnings
       
       // Register achievement callback
       achievementManager.onUnlock(async (achievement) => {
@@ -437,176 +437,217 @@ export const Game: React.FC = () => {
     );
   }
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4">
-      {/* Wallet Connection */}
-      <div className="w-full max-w-4xl mb-4 flex justify-end">
-        <WalletButton
-          onConnect={(address) => {
-            setWalletAddress(address);
-            // Configure NFT manager with contract address (set after deployment)
-            const contractAddress = getNFTContractAddress();
-            if (contractAddress && contractAddress !== '0x0000000000000000000000000000000000000000') {
-              nftManager.setConfig({
-                contractAddress,
-                contractABI: ACHIEVEMENT_NFT_ABI,
-              });
-            }
-          }}
-          onDisconnect={() => {
-            setWalletAddress(null);
-          }}
-        />
-      </div>
+  // Resume audio on first user interaction
+  const handleUserInteraction = useCallback(async () => {
+    await soundManager.resumeAudioContext();
+    if (!soundManager.getMusicEnabled()) {
+      soundManager.setMusicEnabled(true);
+    }
+  }, []);
 
-      {/* Game Info Bar */}
-      <div className="w-full max-w-4xl mb-4 bg-gray-800 rounded-lg p-4 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+  return (
+    <div className="flex items-start justify-center min-h-screen bg-gray-900 p-4 overflow-hidden">
+      <div className="flex gap-4 max-w-[1400px] w-full">
+        {/* Left Sidebar - Controls */}
+        <div className="flex-shrink-0 w-64 space-y-4">
+          {/* Wallet Connection */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <WalletButton
+              onConnect={async (address) => {
+                await handleUserInteraction();
+                setWalletAddress(address);
+                // Configure NFT manager with contract address (set after deployment)
+                const contractAddress = getNFTContractAddress();
+                if (contractAddress && contractAddress !== '0x0000000000000000000000000000000000000000') {
+                  nftManager.setConfig({
+                    contractAddress,
+                    contractABI: ACHIEVEMENT_NFT_ABI,
+                  });
+                }
+              }}
+              onDisconnect={() => {
+                setWalletAddress(null);
+              }}
+            />
+          </div>
+
+          {/* Game Controls */}
+          <div className="bg-gray-800 rounded-lg p-4 text-white space-y-4">
+            <div>
+              <div className="text-sm text-gray-400 mb-2">Health</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-4 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      healthPercent > 50 ? 'bg-green-500' : healthPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${healthPercent}%` }}
+                  />
+                </div>
+                <span className="text-sm whitespace-nowrap">{gameEngine.gameState.playerHealth}/{gameEngine.gameState.maxPlayerHealth}</span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={async () => {
+                  await handleUserInteraction();
+                  handlePause();
+                }}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm"
+              >
+                {gameEngine.gameState.isPaused ? 'Resume' : 'Pause'}
+              </button>
+              <button
+                onClick={async () => {
+                  await handleUserInteraction();
+                  handleReset();
+                }}
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm"
+              >
+                Reset
+              </button>
+              <button
+                onClick={async () => {
+                  await handleUserInteraction();
+                  setShowSettings(true);
+                }}
+                className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                title="Settings"
+              >
+                ⚙️
+              </button>
+              <button
+                onClick={async () => {
+                  await handleUserInteraction();
+                  setShowAchievements(true);
+                }}
+                className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors text-sm"
+                title="Achievements"
+              >
+                🏆
+              </button>
+            </div>
+            <button
+              onClick={async () => {
+                await handleUserInteraction();
+                setShowLeaderboard(true);
+              }}
+              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm"
+              title="Leaderboard"
+            >
+              📊 Leaderboard
+            </button>
+          </div>
+
+          {/* Game Stats */}
+          <div className="bg-gray-800 rounded-lg p-4 text-white space-y-2">
             <div>
               <span className="text-sm text-gray-400">Score: </span>
-              <span className="text-xl font-bold">{gameEngine.gameState.score.toLocaleString()}</span>
+              <span className="text-lg font-bold">{gameEngine.gameState.score.toLocaleString()}</span>
             </div>
             <div>
               <span className="text-sm text-gray-400">Level: </span>
-              <span className="text-xl font-bold">{gameEngine.gameState.level}</span>
+              <span className="text-lg font-bold">{gameEngine.gameState.level}</span>
             </div>
             <div>
               <span className="text-sm text-gray-400">Time: </span>
-              <span className="text-xl font-bold">{levelTimeRemaining}s</span>
+              <span className="text-lg font-bold">{levelTimeRemaining}s</span>
             </div>
             {gameEngine.gameState.combo > 1 && (
-              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-3 py-1 rounded-full animate-pulse">
-                <span className="text-sm font-bold text-white">
+              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-2 py-1 rounded-full animate-pulse mt-2">
+                <span className="text-xs font-bold text-white">
                   {gameEngine.gameState.combo}x COMBO! ({gameEngine.gameState.comboMultiplier.toFixed(1)}x)
                 </span>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">Health: </span>
-              <div className="w-32 h-4 bg-gray-700 rounded-full overflow-hidden">
+        </div>
+
+        {/* Main Game Area */}
+        <div className="flex-1 flex flex-col items-center">
+
+          {/* FPS Counter */}
+          {settingsManager.getSetting('showFPS') && (
+            <div className="absolute top-2 right-2 bg-black/70 text-green-400 px-2 py-1 rounded text-sm font-mono z-20">
+              FPS: {fps}
+            </div>
+          )}
+
+          {/* Achievement Notifications */}
+          {newAchievements.length > 0 && (
+            <div className="fixed top-4 right-4 z-50 space-y-2">
+              {newAchievements.map((achievement) => (
                 <div
-                  className={`h-full transition-all ${
-                    healthPercent > 50 ? 'bg-green-500' : healthPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
-                  style={{ width: `${healthPercent}%` }}
-                />
-              </div>
-              <span className="text-sm">{gameEngine.gameState.playerHealth}/{gameEngine.gameState.maxPlayerHealth}</span>
-            </div>
-            <button
-              onClick={handlePause}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              {gameEngine.gameState.isPaused ? 'Resume' : 'Pause'}
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
-              title="Settings"
-            >
-              ⚙️
-            </button>
-            <button
-              onClick={() => setShowAchievements(true)}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors"
-              title="Achievements"
-            >
-              🏆
-            </button>
-            <button
-              onClick={() => setShowLeaderboard(true)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-              title="Leaderboard"
-            >
-              📊
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* FPS Counter */}
-      {settingsManager.getSetting('showFPS') && (
-        <div className="absolute top-2 right-2 bg-black/70 text-green-400 px-2 py-1 rounded text-sm font-mono">
-          FPS: {fps}
-        </div>
-      )}
-
-      {/* Achievement Notifications */}
-      {newAchievements.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 space-y-2">
-          {newAchievements.map((achievement) => (
-            <div
-              key={achievement.id}
-              className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-4 rounded-lg shadow-lg animate-bounce border-2 border-yellow-300"
-            >
-              <div className="font-bold text-lg">🏆 Achievement Unlocked!</div>
-              <div className="font-semibold">{achievement.name}</div>
-              <div className="text-sm opacity-90">{achievement.description}</div>
-              {walletAddress && walletManager.isConnected() && (
-                <button
-                  onClick={() => handleMintAchievementNFT(achievement)}
-                  disabled={mintingNFT === achievement.id}
-                  className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm transition-colors"
+                  key={achievement.id}
+                  className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-4 rounded-lg shadow-lg animate-bounce border-2 border-yellow-300 max-w-sm"
                 >
-                  {mintingNFT === achievement.id ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Minting NFT...
-                    </span>
+                  <div className="font-bold text-lg">🏆 Achievement Unlocked!</div>
+                  <div className="font-semibold">{achievement.name}</div>
+                  <div className="text-sm opacity-90">{achievement.description}</div>
+                  {walletAddress && walletManager.isConnected() ? (
+                    <button
+                      onClick={async () => {
+                        await handleUserInteraction();
+                        handleMintAchievementNFT(achievement);
+                      }}
+                      disabled={mintingNFT === achievement.id}
+                      className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm transition-colors"
+                    >
+                      {mintingNFT === achievement.id ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Minting NFT...
+                        </span>
+                      ) : (
+                        '🎨 Mint as NFT'
+                      )}
+                    </button>
                   ) : (
-                    '🎨 Mint as NFT'
+                    <div className="mt-2 text-xs bg-gray-800/50 px-3 py-2 rounded">
+                      Connect wallet to mint NFT
+                    </div>
                   )}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Active Power-ups Display */}
-      {gameEngine.activePowerUps.size > 0 && (
-        <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-2 rounded-lg">
-          <div className="text-xs font-bold mb-1">Active Power-ups:</div>
-          <div className="flex gap-2 flex-wrap">
-            {Array.from(gameEngine.activePowerUps.entries()).map(([type, expiration]) => {
-              const timeLeft = Math.max(0, expiration - Date.now());
-              const seconds = Math.ceil(timeLeft / 1000);
-              let icon = '⚡';
-              if (type === 'speed_boost') icon = '💨';
-              else if (type === 'rapid_fire') icon = '🔥';
-              else if (type === 'shield') icon = '🛡️';
-              else if (type === 'multi_shot') icon = '✨';
-              return (
-                <div key={type} className="text-xs">
-                  {icon} {seconds}s
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              ))}
+            </div>
+          )}
 
-      {/* Game Canvas */}
-      <div 
-        className="relative" 
-        key={resetKey}
-        style={{
-          transform: `translate(${screenShake.x}px, ${screenShake.y}px)`,
-          transition: screenShake.intensity > 0 ? 'none' : 'transform 0.1s ease-out',
-        }}
-      >
+          {/* Active Power-ups Display */}
+          {gameEngine.activePowerUps.size > 0 && (
+            <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-2 rounded-lg z-10">
+              <div className="text-xs font-bold mb-1">Active Power-ups:</div>
+              <div className="flex gap-2 flex-wrap">
+                {Array.from(gameEngine.activePowerUps.entries()).map(([type, expiration]) => {
+                  const timeLeft = Math.max(0, expiration - Date.now());
+                  const seconds = Math.ceil(timeLeft / 1000);
+                  let icon = '⚡';
+                  if (type === 'speed_boost') icon = '💨';
+                  else if (type === 'rapid_fire') icon = '🔥';
+                  else if (type === 'shield') icon = '🛡️';
+                  else if (type === 'multi_shot') icon = '✨';
+                  return (
+                    <div key={type} className="text-xs">
+                      {icon} {seconds}s
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Game Canvas */}
+          <div 
+            className="relative" 
+            key={resetKey}
+            style={{
+              transform: `translate(${screenShake.x}px, ${screenShake.y}px)`,
+              transition: screenShake.intensity > 0 ? 'none' : 'transform 0.1s ease-out',
+            }}
+          >
         <GameCanvas
           gameEngine={gameEngine}
           width={CANVAS_WIDTH}
@@ -735,40 +776,42 @@ export const Game: React.FC = () => {
         )}
       </div>
 
-      {/* Mobile Controls */}
-      <div className="md:hidden mt-4 w-full max-w-4xl">
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex justify-center items-center gap-4">
-            <button
-              onTouchStart={handleMoveUp}
-              onMouseDown={handleMoveUp}
-              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
-            >
-              ↑ Up
-            </button>
-            <button
-              onTouchStart={handleShoot}
-              onMouseDown={handleShoot}
-              className="px-8 py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg text-white font-bold text-xl transition-colors"
-            >
-              🔫 Shoot
-            </button>
-            <button
-              onTouchStart={handleMoveDown}
-              onMouseDown={handleMoveDown}
-              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
-            >
-              ↓ Down
-            </button>
+          {/* Mobile Controls */}
+          <div className="md:hidden mt-4 w-full">
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="flex justify-center items-center gap-4">
+                <button
+                  onTouchStart={handleMoveUp}
+                  onMouseDown={handleMoveUp}
+                  className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
+                >
+                  ↑ Up
+                </button>
+                <button
+                  onTouchStart={handleShoot}
+                  onMouseDown={handleShoot}
+                  className="px-8 py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg text-white font-bold text-xl transition-colors"
+                >
+                  🔫 Shoot
+                </button>
+                <button
+                  onTouchStart={handleMoveDown}
+                  onMouseDown={handleMoveDown}
+                  className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
+                >
+                  ↓ Down
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Controls Info */}
+          <div className="hidden md:block mt-4 text-white text-center">
+            <p className="text-sm text-gray-400">
+              Controls: ↑ ↓ Arrow Keys to Move | → Arrow Key to Shoot
+            </p>
           </div>
         </div>
-      </div>
-
-      {/* Desktop Controls Info */}
-      <div className="hidden md:block mt-4 text-white text-center">
-        <p className="text-sm text-gray-400">
-          Controls: ↑ ↓ Arrow Keys to Move | → Arrow Key to Shoot
-        </p>
       </div>
     </div>
   );

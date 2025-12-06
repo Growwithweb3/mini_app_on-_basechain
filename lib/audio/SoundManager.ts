@@ -27,8 +27,16 @@ export class SoundManager {
   }
 
   // Play shooting sound
-  playShoot(): void {
+  async playShoot(): Promise<void> {
     if (!this.soundEnabled || !this.audioContext) return;
+    // Resume audio context if needed
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        return; // Silently fail
+      }
+    }
     this.playTone(200, 0.05, 'sine', 0.1);
   }
 
@@ -124,8 +132,19 @@ export class SoundManager {
   }
 
   // Start background music
-  startBackgroundMusic(): void {
+  async startBackgroundMusic(): Promise<void> {
     if (!this.musicEnabled || !this.audioContext || !this.musicGainNode) return;
+    
+    // Resume audio context if suspended (required for autoplay policy)
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn('Could not resume audio context:', e);
+        return;
+      }
+    }
+    
     this.stopBackgroundMusic();
 
     // Create a simple ambient background tone
@@ -143,6 +162,17 @@ export class SoundManager {
     this.backgroundMusic = oscillator;
     this.backgroundMusicGain = gainNode;
   }
+  
+  // Resume audio context (call after user interaction)
+  async resumeAudioContext(): Promise<void> {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn('Could not resume audio context:', e);
+      }
+    }
+  }
 
   // Stop background music
   stopBackgroundMusic(): void {
@@ -159,6 +189,11 @@ export class SoundManager {
   // Set sound enabled
   setSoundEnabled(enabled: boolean): void {
     this.soundEnabled = enabled;
+  }
+
+  // Get music enabled state
+  getMusicEnabled(): boolean {
+    return this.musicEnabled;
   }
 
   // Set music enabled
