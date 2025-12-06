@@ -361,9 +361,24 @@ export const Game: React.FC = () => {
         const ipfsHash = await PinataManager.uploadImage(imageBlob, `achievement-${achievement.id}.png`);
         console.log('Image uploaded to IPFS:', ipfsHash);
         
-        // Use ipfs:// format for metadata (NFT marketplaces will resolve this)
-        // Keep the ipfs:// format as it's the standard
-        imageIpfsHash = ipfsHash; // This should be ipfs://QmHash...
+        // Convert ipfs:// URL to HTTP gateway URL for wallet compatibility
+        // MetaMask and most wallets don't resolve ipfs:// protocol directly
+        // They need HTTP gateway URLs like https://gateway.pinata.cloud/ipfs/HASH
+        if (ipfsHash.startsWith('ipfs://')) {
+          const hash = ipfsHash.replace('ipfs://', '').replace('ipfs/', '');
+          // Use Pinata gateway (most reliable for your setup)
+          // Alternative gateways: https://ipfs.io/ipfs/ or https://cloudflare-ipfs.com/ipfs/
+          imageIpfsHash = `https://gateway.pinata.cloud/ipfs/${hash}`;
+          console.log('✅ Image uploaded and converted to gateway URL:', imageIpfsHash);
+        } else if (ipfsHash.startsWith('https://')) {
+          // Already a gateway URL, use as-is
+          imageIpfsHash = ipfsHash;
+          console.log('✅ Using provided gateway URL:', imageIpfsHash);
+        } else {
+          // Assume it's just a hash, prepend Pinata gateway
+          imageIpfsHash = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+          console.log('✅ Converted hash to gateway URL:', imageIpfsHash);
+        }
       } catch (error: any) {
         console.error('Failed to upload image to IPFS:', error);
         // Fallback: use a placeholder or manually uploaded image
