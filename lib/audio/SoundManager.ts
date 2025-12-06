@@ -197,12 +197,16 @@ export class SoundManager {
   }
 
   // Set music enabled
-  setMusicEnabled(enabled: boolean): void {
+  async setMusicEnabled(enabled: boolean): Promise<void> {
     this.musicEnabled = enabled;
     if (!enabled) {
       this.stopBackgroundMusic();
     } else {
-      this.startBackgroundMusic();
+      // Only start music if audio context is already active
+      if (this.audioContext && this.audioContext.state === 'running') {
+        await this.startBackgroundMusic();
+      }
+      // Otherwise, music will start after user interaction via resumeAudioContext
     }
   }
 

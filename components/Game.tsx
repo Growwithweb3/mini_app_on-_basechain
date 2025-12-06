@@ -365,11 +365,30 @@ export const Game: React.FC = () => {
     Math.ceil((gameEngine.gameState.levelDuration - (Date.now() - gameEngine.gameState.levelStartTime)) / 1000)
   );
 
+
+  // Resume audio on first user interaction
+  const handleUserInteraction = useCallback(async () => {
+    try {
+      await soundManager.resumeAudioContext();
+      // Start music after audio context is resumed
+      if (!soundManager.getMusicEnabled()) {
+        await soundManager.setMusicEnabled(true);
+      } else {
+        // If music is enabled but not started, start it now
+        await soundManager.startBackgroundMusic();
+      }
+    } catch (error) {
+      // Silently fail if audio context can't be resumed
+      console.warn('Could not resume audio context:', error);
+    }
+  }, []);
+
   // Show welcome screen first
   if (showWelcome) {
     return (
       <WelcomeScreen
-        onPlayGame={() => {
+        onPlayGame={async () => {
+          await handleUserInteraction();
           const settings = settingsManager.getSettings();
           if (settings.showFPS) {
             // FPS counter will be shown
@@ -427,7 +446,10 @@ export const Game: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setShowTutorial(false)}
+            onClick={async () => {
+              await handleUserInteraction();
+              setShowTutorial(false);
+            }}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg text-xl transition-all"
           >
             Start Playing!
@@ -436,14 +458,6 @@ export const Game: React.FC = () => {
       </div>
     );
   }
-
-  // Resume audio on first user interaction
-  const handleUserInteraction = useCallback(async () => {
-    await soundManager.resumeAudioContext();
-    if (!soundManager.getMusicEnabled()) {
-      soundManager.setMusicEnabled(true);
-    }
-  }, []);
 
   return (
     <div className="flex items-start justify-center min-h-screen bg-gray-900 p-4 overflow-hidden">
