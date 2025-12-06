@@ -808,7 +808,7 @@ export const Game: React.FC = () => {
                     } catch (error) {
                       console.error('Failed to capture screenshot:', error);
                       // Fallback to text share
-                      const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score? @base`;
+                      const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score?\n\nPlay this game base the shooter : https://mini-app-on-basechain.vercel.app/`;
                       if (navigator.share) {
                         navigator.share({ text, title: 'Base the Shooter' });
                       } else {
@@ -1181,7 +1181,7 @@ export const Game: React.FC = () => {
               {/* Share on X (Twitter) */}
               <button
                 onClick={() => {
-                  const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score? @base`;
+                  const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score?\n\nPlay this game base the shooter : https://mini-app-on-basechain.vercel.app/`;
                   const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
                   window.open(url, '_blank');
                 }}
@@ -1242,7 +1242,7 @@ export const Game: React.FC = () => {
                       });
                     } else {
                       // Fallback to text share
-                      const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score? @base`;
+                      const text = `I scored ${gameEngine.gameState.score.toLocaleString()} points in Base the Shooter! 🎮 Can you beat my score?\n\nPlay this game base the shooter : https://mini-app-on-basechain.vercel.app/`;
                       if (navigator.share) {
                         await navigator.share({ text, title: 'Base the Shooter' });
                       } else {
