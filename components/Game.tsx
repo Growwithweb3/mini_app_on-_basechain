@@ -53,10 +53,18 @@ export const Game: React.FC = () => {
       
       // Register achievement callback
       achievementManager.onUnlock(async (achievement) => {
-        setNewAchievements((prev: any[]) => [...prev, achievement]);
+        console.log('🏆 Achievement unlocked:', achievement);
+        setNewAchievements((prev: any[]) => {
+          // Check if already in list to avoid duplicates
+          if (prev.find(a => a.id === achievement.id)) {
+            return prev;
+          }
+          return [...prev, achievement];
+        });
+        // Keep notification for 30 seconds instead of 5
         setTimeout(() => {
           setNewAchievements((prev: any[]) => prev.filter((a: any) => a.id !== achievement.id));
-        }, 5000);
+        }, 30000);
 
         // Auto-mint NFT if wallet is connected
         if (walletAddress && walletManager.isConnected()) {
@@ -89,7 +97,7 @@ export const Game: React.FC = () => {
     };
   }, [walletAddress]);
 
-  // FPS counter
+  // FPS counter and achievement checking
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -101,9 +109,22 @@ export const Game: React.FC = () => {
       } else {
         fpsRef.current.frames++;
       }
-    }, 100);
+
+      // Check achievements every second
+      if (!gameEngine.gameState.isPaused && !gameEngine.gameState.isGameOver) {
+        const stats = {
+          enemiesKilled: gameEngine.gameState.enemiesKilled,
+          bulletsShot: gameEngine.gameState.bulletsShot,
+          bulletsHit: gameEngine.gameState.bulletsHit,
+          gameStartTime: gameEngine.gameState.gameStartTime,
+          powerUpsCollected: powerUpsCollected,
+        };
+        achievementManager.checkAchievements(gameEngine.gameState, stats);
+      }
+    }, 1000); // Check every second
+
     return () => clearInterval(interval);
-  }, []);
+  }, [powerUpsCollected]);
 
   // Check for new high score when game ends
   useEffect(() => {
@@ -460,8 +481,8 @@ export const Game: React.FC = () => {
   }
 
   return (
-    <div className="flex items-start justify-center min-h-screen bg-gray-900 overflow-hidden" style={{ paddingTop: '10%', paddingLeft: '10%', paddingRight: '4%', paddingBottom: '2%' }}>
-      <div className="flex gap-4 max-w-[1400px] w-full">
+    <div className="flex items-center justify-center h-screen bg-gray-900 overflow-hidden" style={{ padding: '2% 10%' }}>
+      <div className="flex gap-4 w-full h-full max-w-[1600px]">
         {/* Left Sidebar - Controls */}
         <div className="flex-shrink-0 w-64 space-y-4">
           {/* Wallet Connection */}
@@ -579,7 +600,7 @@ export const Game: React.FC = () => {
         </div>
 
         {/* Main Game Area */}
-        <div className="flex-1 flex flex-col items-center justify-center" style={{ paddingTop: '2%' }}>
+        <div className="flex-1 flex flex-col items-center justify-center h-full">
 
           {/* FPS Counter */}
           {settingsManager.getSetting('showFPS') && (
@@ -590,7 +611,7 @@ export const Game: React.FC = () => {
 
           {/* Achievement Notifications */}
           {newAchievements.length > 0 && (
-            <div className="fixed top-20 right-8 z-50 space-y-3" style={{ maxWidth: '400px' }}>
+            <div className="fixed top-4 right-4 z-[100] space-y-3" style={{ maxWidth: '400px' }}>
               {newAchievements.map((achievement) => (
                 <div
                   key={achievement.id}
