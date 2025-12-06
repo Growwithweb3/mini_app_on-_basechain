@@ -25,6 +25,8 @@ export const Game: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showMintNFT, setShowMintNFT] = useState(false);
+  const [mintableAchievements, setMintableAchievements] = useState<any[]>([]);
   const [gameEngine] = useState(() => new GameEngine(CANVAS_WIDTH, CANVAS_HEIGHT));
   const [keys, setKeys] = useState<Set<string>>(new Set());
   const gameEngineRef = useRef(gameEngine);
@@ -347,61 +349,11 @@ export const Game: React.FC = () => {
         return;
       }
 
-      // Upload image to IPFS first
-      let imageIpfsHash: string;
-      try {
-        // Fetch the image from public folder
-        const imageResponse = await fetch('/images/I trust on base.png');
-        if (!imageResponse.ok) {
-          throw new Error('Failed to fetch image');
-        }
-        const imageBlob = await imageResponse.blob();
-        
-        // Upload to IPFS
-        const ipfsHash = await PinataManager.uploadImage(imageBlob, `achievement-${achievement.id}.png`);
-        console.log('Image uploaded to IPFS:', ipfsHash);
-        
-        // Convert ipfs:// URL to HTTP gateway URL for wallet compatibility
-        // MetaMask and most wallets don't resolve ipfs:// protocol directly
-        // They need HTTP gateway URLs like https://gateway.pinata.cloud/ipfs/HASH
-        if (ipfsHash.startsWith('ipfs://')) {
-          const hash = ipfsHash.replace('ipfs://', '').replace('ipfs/', '');
-          // Use Pinata gateway (most reliable for your setup)
-          // Alternative gateways: https://ipfs.io/ipfs/ or https://cloudflare-ipfs.com/ipfs/
-          imageIpfsHash = `https://gateway.pinata.cloud/ipfs/${hash}`;
-          console.log('✅ Image uploaded and converted to gateway URL:', imageIpfsHash);
-          
-          // Verify image is accessible before proceeding
-          try {
-            const imageTest = await fetch(imageIpfsHash, { method: 'HEAD', cache: 'no-cache' });
-            if (imageTest.ok) {
-              console.log('✅ Image URL verified - accessible at:', imageIpfsHash);
-            } else {
-              console.warn('⚠️  Image URL returned status:', imageTest.status, imageTest.statusText);
-              // Try alternative gateway
-              const altUrl = `https://ipfs.io/ipfs/${hash}`;
-              console.log('🔄 Trying alternative gateway:', altUrl);
-              imageIpfsHash = altUrl;
-            }
-          } catch (error) {
-            console.warn('⚠️  Could not verify image URL, but proceeding:', error);
-          }
-        } else if (ipfsHash.startsWith('https://')) {
-          // Already a gateway URL, use as-is
-          imageIpfsHash = ipfsHash;
-          console.log('✅ Using provided gateway URL:', imageIpfsHash);
-        } else {
-          // Assume it's just a hash, prepend Pinata gateway
-          imageIpfsHash = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-          console.log('✅ Converted hash to gateway URL:', imageIpfsHash);
-        }
-      } catch (error: any) {
-        console.error('Failed to upload image to IPFS:', error);
-        // Fallback: use a placeholder or manually uploaded image
-        // TODO: Upload your image manually to Pinata and replace this URL
-        imageIpfsHash = 'https://gateway.pinata.cloud/ipfs/YOUR_IMAGE_HASH_HERE';
-        alert('Warning: Image upload failed. Please ensure Pinata is configured correctly.');
-      }
+      // Use fixed image CID that was manually uploaded to Pinata
+      // CID: bafkreifub6dg3mkx4kj4654i63tm5pc7sey5rjoxejwxwwmcz2o4cnc3re
+      const FIXED_IMAGE_CID = 'bafkreifub6dg3mkx4kj4654i63tm5pc7sey5rjoxejwxwwmcz2o4cnc3re';
+      const imageIpfsHash = `https://gateway.pinata.cloud/ipfs/${FIXED_IMAGE_CID}`;
+      console.log('✅ Using fixed image CID:', imageIpfsHash);
 
       // Log what we're about to mint (for debugging)
       console.log('📦 Minting NFT with:');
@@ -780,6 +732,43 @@ export const Game: React.FC = () => {
                 </div>
               </div>
 
+              {/* Mint NFT Button */}
+              <button
+                onClick={async () => {
+                  await handleUserInteraction();
+                  // Check which achievements are mintable
+                  const allAchievements = achievementManager.getAllAchievements();
+                  const mintable: any[] = [];
+                  
+                  for (const achievement of allAchievements) {
+                    if (achievement.unlocked) {
+                      // Check if already minted
+                      if (walletAddress && walletManager.isConnected()) {
+                        try {
+                          const alreadyMinted = await nftManager.isAchievementMinted(achievement.id, walletAddress);
+                          if (!alreadyMinted) {
+                            mintable.push(achievement);
+                          }
+                        } catch (error) {
+                          console.error('Error checking mint status:', error);
+                          // If check fails, still show as mintable
+                          mintable.push(achievement);
+                        }
+                      } else {
+                        // Not connected, show all unlocked achievements
+                        mintable.push(achievement);
+                      }
+                    }
+                  }
+                  
+                  setMintableAchievements(mintable);
+                  setShowMintNFT(true);
+                }}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg mb-2"
+              >
+                🎨 Mint NFT
+              </button>
+
               {/* Share Score Button */}
               <button
                 onClick={() => {
@@ -976,6 +965,148 @@ export const Game: React.FC = () => {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mint NFT Modal - Shows at Game Over */}
+      {showMintNFT && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border-2 border-purple-500">
+            <div className="sticky top-0 bg-gray-800 p-6 border-b border-gray-700 flex justify-between items-center">
+              <h2 className="text-3xl font-bold text-white">🎨 Mint Your Achievements as NFTs</h2>
+              <button
+                onClick={() => setShowMintNFT(false)}
+                className="text-gray-400 hover:text-white text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {mintableAchievements.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-xl text-gray-400 mb-4">
+                    {walletAddress && walletManager.isConnected() 
+                      ? "You've already minted all your unlocked achievements! 🎉"
+                      : "Connect your wallet to see mintable achievements"}
+                  </p>
+                  {!walletAddress && (
+                    <button
+                      onClick={async () => {
+                        await handleUserInteraction();
+                        if (walletManager.getProviderInstance()) {
+                          try {
+                            await walletManager.connect();
+                            // Refresh mintable list after connecting
+                            const allAchievements = achievementManager.getAllAchievements();
+                            const mintable: any[] = [];
+                            for (const achievement of allAchievements) {
+                              if (achievement.unlocked) {
+                                mintable.push(achievement);
+                              }
+                            }
+                            setMintableAchievements(mintable);
+                          } catch (error) {
+                            alert('Please connect your wallet first!');
+                          }
+                        } else {
+                          alert('Please install MetaMask and connect your wallet to mint NFTs!');
+                        }
+                      }}
+                      className="mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg"
+                    >
+                      🔗 Connect Wallet
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <p className="text-gray-300 mb-4">
+                    You have <span className="font-bold text-purple-400">{mintableAchievements.length}</span> achievement{mintableAchievements.length > 1 ? 's' : ''} ready to mint!
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {mintableAchievements.map((achievement) => {
+                      const isMinting = mintingNFT === achievement.id;
+                      
+                      return (
+                        <div
+                          key={achievement.id}
+                          className="p-4 rounded-lg border-2 bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h3 className="font-bold text-lg text-yellow-400">
+                                🏆 {achievement.name}
+                              </h3>
+                              <p className="text-sm text-gray-300 mt-1">{achievement.description}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3">
+                            {walletAddress && walletManager.isConnected() ? (
+                              <button
+                                onClick={async () => {
+                                  await handleUserInteraction();
+                                  try {
+                                    await handleMintAchievementNFT(achievement);
+                                    // Remove from mintable list after successful mint
+                                    setMintableAchievements(prev => prev.filter(a => a.id !== achievement.id));
+                                  } catch (error: any) {
+                                    alert(`Failed to mint: ${error.message}`);
+                                  }
+                                }}
+                                disabled={isMinting}
+                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors"
+                              >
+                                {isMinting ? (
+                                  <span className="flex items-center justify-center gap-2">
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    Minting...
+                                  </span>
+                                ) : (
+                                  '🎨 Mint as NFT'
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  await handleUserInteraction();
+                                  if (walletManager.getProviderInstance()) {
+                                    try {
+                                      await walletManager.connect();
+                                      // Refresh mintable list after connecting
+                                      const allAchievements = achievementManager.getAllAchievements();
+                                      const mintable: any[] = [];
+                                      for (const achievement of allAchievements) {
+                                        if (achievement.unlocked) {
+                                          mintable.push(achievement);
+                                        }
+                                      }
+                                      setMintableAchievements(mintable);
+                                    } catch (error) {
+                                      alert('Please connect your wallet first!');
+                                    }
+                                  } else {
+                                    alert('Please install MetaMask and connect your wallet to mint NFTs!');
+                                  }
+                                }}
+                                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors"
+                              >
+                                🔗 Connect Wallet to Mint
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
