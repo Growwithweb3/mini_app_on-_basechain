@@ -460,7 +460,7 @@ export const Game: React.FC = () => {
   }
 
   return (
-    <div className="flex items-start justify-center min-h-screen bg-gray-900 p-4 overflow-hidden">
+    <div className="flex items-start justify-center min-h-screen bg-gray-900 overflow-hidden" style={{ paddingTop: '10%', paddingLeft: '10%', paddingRight: '4%', paddingBottom: '2%' }}>
       <div className="flex gap-4 max-w-[1400px] w-full">
         {/* Left Sidebar - Controls */}
         <div className="flex-shrink-0 w-64 space-y-4">
@@ -579,7 +579,7 @@ export const Game: React.FC = () => {
         </div>
 
         {/* Main Game Area */}
-        <div className="flex-1 flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center justify-center" style={{ paddingTop: '2%' }}>
 
           {/* FPS Counter */}
           {settingsManager.getSetting('showFPS') && (
@@ -590,41 +590,74 @@ export const Game: React.FC = () => {
 
           {/* Achievement Notifications */}
           {newAchievements.length > 0 && (
-            <div className="fixed top-4 right-4 z-50 space-y-2">
+            <div className="fixed top-20 right-8 z-50 space-y-3" style={{ maxWidth: '400px' }}>
               {newAchievements.map((achievement) => (
                 <div
                   key={achievement.id}
-                  className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-4 rounded-lg shadow-lg animate-bounce border-2 border-yellow-300 max-w-sm"
+                  className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-6 py-5 rounded-lg shadow-2xl animate-bounce border-2 border-yellow-300"
                 >
-                  <div className="font-bold text-lg">🏆 Achievement Unlocked!</div>
-                  <div className="font-semibold">{achievement.name}</div>
-                  <div className="text-sm opacity-90">{achievement.description}</div>
-                  {walletAddress && walletManager.isConnected() ? (
-                    <button
-                      onClick={async () => {
-                        await handleUserInteraction();
-                        handleMintAchievementNFT(achievement);
-                      }}
-                      disabled={mintingNFT === achievement.id}
-                      className="mt-2 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm transition-colors"
-                    >
-                      {mintingNFT === achievement.id ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Minting NFT...
-                        </span>
-                      ) : (
-                        '🎨 Mint as NFT'
-                      )}
-                    </button>
-                  ) : (
-                    <div className="mt-2 text-xs bg-gray-800/50 px-3 py-2 rounded">
-                      Connect wallet to mint NFT
-                    </div>
-                  )}
+                  <div className="font-bold text-xl mb-2">🏆 Achievement Unlocked!</div>
+                  <div className="font-semibold text-lg mb-1">{achievement.name}</div>
+                  <div className="text-sm opacity-90 mb-3">{achievement.description}</div>
+                  
+                  {/* Always show mint button, with different states */}
+                  <div className="space-y-2">
+                    {walletAddress && walletManager.isConnected() ? (
+                      <>
+                        <button
+                          onClick={async () => {
+                            await handleUserInteraction();
+                            handleMintAchievementNFT(achievement);
+                          }}
+                          disabled={mintingNFT === achievement.id}
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors shadow-lg"
+                        >
+                          {mintingNFT === achievement.id ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              Minting NFT...
+                            </span>
+                          ) : (
+                            <span className="flex items-center justify-center gap-2">
+                              🎨 Mint as NFT
+                            </span>
+                          )}
+                        </button>
+                        <div className="text-xs text-center text-yellow-100">
+                          Click to mint your achievement as an NFT on Base!
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={async () => {
+                            await handleUserInteraction();
+                            // Try to connect wallet
+                            if (walletManager.getProviderInstance()) {
+                              try {
+                                await walletManager.connect();
+                              } catch (error) {
+                                alert('Please connect your wallet first!');
+                              }
+                            } else {
+                              alert('Please install MetaMask and connect your wallet to mint NFTs!');
+                            }
+                          }}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg text-sm transition-colors shadow-lg"
+                        >
+                          <span className="flex items-center justify-center gap-2">
+                            🔗 Connect Wallet to Mint NFT
+                          </span>
+                        </button>
+                        <div className="text-xs text-center text-yellow-100">
+                          Connect your wallet to mint this achievement as an NFT!
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
