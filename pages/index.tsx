@@ -25,8 +25,6 @@ export default function Home() {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="screen-orientation" content="landscape" />
-        <meta name="orientation" content="landscape" />
         <link rel="icon" href="/images/icon.png" />
         {/* Open Graph tags for social sharing */}
         <meta property="og:title" content="Base the Shooter" />

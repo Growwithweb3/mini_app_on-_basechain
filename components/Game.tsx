@@ -20,28 +20,45 @@ import html2canvas from 'html2canvas';
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
-// Mobile responsive dimensions - Landscape mode support
+// Mobile responsive dimensions - Support both portrait and landscape
 const getMobileDimensions = () => {
   if (typeof window === 'undefined') return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
   
-  const isMobile = window.innerWidth < 1024 || /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isLandscape = window.innerWidth > window.innerHeight;
+  const isMobile = window.innerWidth < 1024;
+  const isPortrait = window.innerHeight > window.innerWidth;
   
-  if (isMobile && isLandscape) {
-    // Landscape mode: use full viewport (like PUBG)
-    const maxWidth = window.innerWidth - 20; // 10px padding on each side
-    const maxHeight = window.innerHeight - 120; // Leave space for controls
+  if (isMobile) {
     const aspectRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
     
-    let width = maxWidth;
-    let height = maxWidth / aspectRatio;
-    
-    if (height > maxHeight) {
-      height = maxHeight;
-      width = maxHeight * aspectRatio;
+    if (isPortrait) {
+      // Portrait mode: use full width, adjust height
+      const maxWidth = window.innerWidth - 20; // 10px padding on each side
+      const maxHeight = window.innerHeight - 200; // Leave space for controls at bottom
+      
+      let width = maxWidth;
+      let height = maxWidth / aspectRatio;
+      
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = maxHeight * aspectRatio;
+      }
+      
+      return { width: Math.floor(width), height: Math.floor(height) };
+    } else {
+      // Landscape mode: use full viewport
+      const maxWidth = window.innerWidth - 20; // 10px padding on each side
+      const maxHeight = window.innerHeight - 100; // Leave space for controls
+      
+      let width = maxWidth;
+      let height = maxWidth / aspectRatio;
+      
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = maxHeight * aspectRatio;
+      }
+      
+      return { width: Math.floor(width), height: Math.floor(height) };
     }
-    
-    return { width: Math.floor(width), height: Math.floor(height) };
   }
   
   return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
@@ -75,7 +92,6 @@ export const Game: React.FC = () => {
   const fpsRef = useRef({ frames: 0, lastTime: Date.now() });
   const [canvasDimensions, setCanvasDimensions] = useState({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
   const [isPortrait, setIsPortrait] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
 
   // Initialize game systems
   useEffect(() => {
@@ -212,36 +228,29 @@ export const Game: React.FC = () => {
     };
   }, []);
 
-  // Detect mobile devices and orientation
+  // Handle orientation and responsive sizing
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const checkMobileAndOrientation = () => {
-      const userAgent = navigator.userAgent;
-      // Check if it's a mobile device (including all mobile devices)
-      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || window.innerWidth < 1024;
-      setIsMobile(isMobileDevice);
-      
-      // Check if in portrait mode on mobile
+    const updateDimensions = () => {
+      const isMobile = window.innerWidth < 1024;
       const isPortraitMode = window.innerHeight > window.innerWidth;
-      setIsPortrait(isMobileDevice && isPortraitMode);
+      setIsPortrait(isMobile && isPortraitMode);
       
-      // Update canvas dimensions
       const dims = getMobileDimensions();
       setCanvasDimensions(dims);
+      // Update game engine canvas size
       if (gameEngine) {
         gameEngine.canvasWidth = dims.width;
         gameEngine.canvasHeight = dims.height;
       }
     };
-    
-    checkMobileAndOrientation();
-    window.addEventListener('resize', checkMobileAndOrientation);
-    window.addEventListener('orientationchange', checkMobileAndOrientation);
-    
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    window.addEventListener('orientationchange', updateDimensions);
+
     return () => {
-      window.removeEventListener('resize', checkMobileAndOrientation);
-      window.removeEventListener('orientationchange', checkMobileAndOrientation);
+      window.removeEventListener('resize', updateDimensions);
+      window.removeEventListener('orientationchange', updateDimensions);
     };
   }, [gameEngine]);
 
@@ -589,32 +598,16 @@ export const Game: React.FC = () => {
     <div 
       className="flex items-center justify-center min-h-screen bg-gray-900 overflow-hidden" 
       style={{ 
-        padding: isMobile ? '5px' : '2% 10%',
+        padding: typeof window !== 'undefined' && window.innerWidth < 1024 ? (isPortrait ? '10px 5px' : '5px') : '2% 10%',
         width: '100vw',
         height: '100vh',
         maxHeight: '100vh',
         overflow: 'hidden'
       }}
     >
-      {/* Portrait Mode Warning - Show when in portrait on mobile */}
-      {isMobile && isPortrait && (
-        <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[200]">
-          <div className="text-center text-white p-6 max-w-md mx-4">
-            <div className="text-6xl mb-4 animate-spin">📱</div>
-            <h2 className="text-3xl font-bold mb-4">Rotate to Landscape</h2>
-            <p className="text-lg mb-6">
-              Please rotate your device to landscape (horizontal) mode to play the game.
-            </p>
-            <p className="text-sm text-gray-400">
-              Screen orientation: Horizontal / Landscape mode required
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className={`flex gap-4 w-full h-full max-w-[1600px] ${isMobile ? 'flex-col' : ''}`}>
+      <div className={`flex gap-4 w-full h-full max-w-[1600px] ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'flex-col' : ''}`}>
         {/* Left Sidebar - Controls - Hidden on mobile */}
-        {!isMobile && (
+        {(typeof window === 'undefined' || window.innerWidth >= 1024) && (
           <div className="flex-shrink-0 w-64 space-y-4">
       {/* Wallet Connection */}
           <div className="bg-gray-800 rounded-lg p-4">
@@ -711,11 +704,11 @@ export const Game: React.FC = () => {
             <div>
               <span className="text-sm text-gray-400">Score: </span>
               <span className="text-lg font-bold">{gameEngine.gameState.score.toLocaleString()}</span>
-        </div>
+            </div>
             <div>
               <span className="text-sm text-gray-400">Level: </span>
               <span className="text-lg font-bold">{gameEngine.gameState.level}</span>
-      </div>
+            </div>
             <div>
               <span className="text-sm text-gray-400">Time: </span>
               <span className="text-lg font-bold">{levelTimeRemaining}s</span>
@@ -732,7 +725,7 @@ export const Game: React.FC = () => {
         )}
 
         {/* Main Game Area */}
-        <div className={`flex-1 flex flex-col items-center justify-center ${isMobile ? 'w-full flex-1' : 'h-full'}`}>
+        <div className={`flex-1 flex flex-col items-center justify-center ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'w-full flex-1' : 'h-full'}`}>
 
       {/* FPS Counter */}
       {settingsManager.getSetting('showFPS') && (
@@ -965,35 +958,41 @@ export const Game: React.FC = () => {
         )}
       </div>
 
-      {/* Mobile Controls - Show in landscape mode on mobile */}
-      {isMobile && !isPortrait && (
-        <div className="w-full mt-2 flex-shrink-0">
+      {/* Mobile Controls - Show on mobile (both portrait and landscape) */}
+      {typeof window !== 'undefined' && window.innerWidth < 1024 && (
+        <div className={`w-full flex-shrink-0 ${isPortrait ? 'mt-2' : 'mt-2'}`}>
           <div className="bg-gray-800 rounded-lg p-3">
-            <div className="flex justify-center items-center gap-3">
-            <button
-              onTouchStart={handleMoveUp}
-              onMouseDown={handleMoveUp}
-              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
-            >
-              ↑ Up
-            </button>
-            <button
-              onTouchStart={handleShoot}
-              onMouseDown={handleShoot}
-              className="px-8 py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg text-white font-bold text-xl transition-colors"
-            >
-              🔫 Shoot
-            </button>
-            <button
-              onTouchStart={handleMoveDown}
-              onMouseDown={handleMoveDown}
-              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-xl transition-colors"
-            >
-              ↓ Down
-            </button>
+            <div className="flex justify-center items-center gap-2 sm:gap-3">
+              <button
+                onTouchStart={(e) => { e.preventDefault(); handleMoveUp(); }}
+                onTouchEnd={(e) => e.preventDefault()}
+                onMouseDown={handleMoveUp}
+                className="px-4 py-3 sm:px-6 sm:py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-lg sm:text-xl transition-colors touch-manipulation"
+                style={{ touchAction: 'manipulation' }}
+              >
+                ↑ Up
+              </button>
+              <button
+                onTouchStart={(e) => { e.preventDefault(); handleShoot(); }}
+                onTouchEnd={(e) => e.preventDefault()}
+                onMouseDown={handleShoot}
+                className="px-6 py-3 sm:px-8 sm:py-4 bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg text-white font-bold text-lg sm:text-xl transition-colors touch-manipulation"
+                style={{ touchAction: 'manipulation' }}
+              >
+                🔫 Shoot
+              </button>
+              <button
+                onTouchStart={(e) => { e.preventDefault(); handleMoveDown(); }}
+                onTouchEnd={(e) => e.preventDefault()}
+                onMouseDown={handleMoveDown}
+                className="px-4 py-3 sm:px-6 sm:py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg text-white font-bold text-lg sm:text-xl transition-colors touch-manipulation"
+                style={{ touchAction: 'manipulation' }}
+              >
+                ↓ Down
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Desktop Controls Info */}
