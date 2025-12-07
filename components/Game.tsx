@@ -24,13 +24,13 @@ const CANVAS_HEIGHT = 600;
 const getMobileDimensions = () => {
   if (typeof window === 'undefined') return { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
   
-  const isMobile = window.innerWidth < 1024;
+  const isMobile = window.innerWidth < 1024 || /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isLandscape = window.innerWidth > window.innerHeight;
   
   if (isMobile && isLandscape) {
     // Landscape mode: use full viewport (like PUBG)
     const maxWidth = window.innerWidth - 20; // 10px padding on each side
-    const maxHeight = window.innerHeight - 100; // Leave space for controls
+    const maxHeight = window.innerHeight - 120; // Leave space for controls
     const aspectRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
     
     let width = maxWidth;
@@ -212,26 +212,38 @@ export const Game: React.FC = () => {
     };
   }, []);
 
-  // Detect mobile devices (excluding iPad)
+  // Detect mobile devices and orientation
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const checkMobile = () => {
+    const checkMobileAndOrientation = () => {
       const userAgent = navigator.userAgent;
-      // Check if it's iPad - iPad should be allowed
-      const isIPad = /iPad/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      // Check if it's a mobile device (but not iPad)
-      const isMobileDevice = !isIPad && (/Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || (window.innerWidth < 768 && !isIPad));
+      // Check if it's a mobile device (including all mobile devices)
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || window.innerWidth < 1024;
       setIsMobile(isMobileDevice);
+      
+      // Check if in portrait mode on mobile
+      const isPortraitMode = window.innerHeight > window.innerWidth;
+      setIsPortrait(isMobileDevice && isPortraitMode);
+      
+      // Update canvas dimensions
+      const dims = getMobileDimensions();
+      setCanvasDimensions(dims);
+      if (gameEngine) {
+        gameEngine.canvasWidth = dims.width;
+        gameEngine.canvasHeight = dims.height;
+      }
     };
     
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    checkMobileAndOrientation();
+    window.addEventListener('resize', checkMobileAndOrientation);
+    window.addEventListener('orientationchange', checkMobileAndOrientation);
     
     return () => {
-      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('resize', checkMobileAndOrientation);
+      window.removeEventListener('orientationchange', checkMobileAndOrientation);
     };
-  }, []);
+  }, [gameEngine]);
 
   // Handle player movement and shooting
   useEffect(() => {
@@ -577,32 +589,32 @@ export const Game: React.FC = () => {
     <div 
       className="flex items-center justify-center min-h-screen bg-gray-900 overflow-hidden" 
       style={{ 
-        padding: typeof window !== 'undefined' && window.innerWidth < 1024 ? '5px' : '2% 10%',
+        padding: isMobile ? '5px' : '2% 10%',
         width: '100vw',
         height: '100vh',
         maxHeight: '100vh',
         overflow: 'hidden'
       }}
     >
-      {/* Mobile Device Warning - Show on mobile devices */}
-      {isMobile && (
+      {/* Portrait Mode Warning - Show when in portrait on mobile */}
+      {isMobile && isPortrait && (
         <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[200]">
           <div className="text-center text-white p-6 max-w-md mx-4">
-            <div className="text-6xl mb-4">⚠️</div>
-            <h2 className="text-3xl font-bold mb-4">Device Not Supported</h2>
+            <div className="text-6xl mb-4 animate-spin">📱</div>
+            <h2 className="text-3xl font-bold mb-4">Rotate to Landscape</h2>
             <p className="text-lg mb-6">
-              Game is only compatible for laptop, PC, and iPad. Not for mobile.
+              Please rotate your device to landscape (horizontal) mode to play the game.
             </p>
             <p className="text-sm text-gray-400">
-              Sorry for the inconvenience.
+              Screen orientation: Horizontal / Landscape mode required
             </p>
           </div>
         </div>
       )}
 
-      <div className={`flex gap-4 w-full h-full max-w-[1600px] ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'flex-col' : ''}`}>
+      <div className={`flex gap-4 w-full h-full max-w-[1600px] ${isMobile ? 'flex-col' : ''}`}>
         {/* Left Sidebar - Controls - Hidden on mobile */}
-        {(typeof window === 'undefined' || window.innerWidth >= 1024) && (
+        {!isMobile && (
           <div className="flex-shrink-0 w-64 space-y-4">
       {/* Wallet Connection */}
           <div className="bg-gray-800 rounded-lg p-4">
@@ -699,11 +711,11 @@ export const Game: React.FC = () => {
             <div>
               <span className="text-sm text-gray-400">Score: </span>
               <span className="text-lg font-bold">{gameEngine.gameState.score.toLocaleString()}</span>
-            </div>
+        </div>
             <div>
               <span className="text-sm text-gray-400">Level: </span>
               <span className="text-lg font-bold">{gameEngine.gameState.level}</span>
-            </div>
+      </div>
             <div>
               <span className="text-sm text-gray-400">Time: </span>
               <span className="text-lg font-bold">{levelTimeRemaining}s</span>
@@ -720,7 +732,7 @@ export const Game: React.FC = () => {
         )}
 
         {/* Main Game Area */}
-        <div className={`flex-1 flex flex-col items-center justify-center ${typeof window !== 'undefined' && window.innerWidth < 1024 ? 'w-full flex-1' : 'h-full'}`}>
+        <div className={`flex-1 flex flex-col items-center justify-center ${isMobile ? 'w-full flex-1' : 'h-full'}`}>
 
       {/* FPS Counter */}
       {settingsManager.getSetting('showFPS') && (
@@ -953,8 +965,8 @@ export const Game: React.FC = () => {
         )}
       </div>
 
-      {/* Mobile Controls - Only show in landscape mode on mobile */}
-      {typeof window !== 'undefined' && window.innerWidth < 1024 && !isPortrait && (
+      {/* Mobile Controls - Show in landscape mode on mobile */}
+      {isMobile && !isPortrait && (
         <div className="w-full mt-2 flex-shrink-0">
           <div className="bg-gray-800 rounded-lg p-3">
             <div className="flex justify-center items-center gap-3">
@@ -981,7 +993,7 @@ export const Game: React.FC = () => {
             </button>
           </div>
         </div>
-        </div>
+      </div>
       )}
 
       {/* Desktop Controls Info */}
